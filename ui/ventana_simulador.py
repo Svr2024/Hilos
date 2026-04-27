@@ -38,7 +38,7 @@ class VentanaSimulador(ctk.CTkToplevel):
 
         self.running = {"state": False}
 
-        self.escenarios = Escenarios(self.buffer, self.log)
+        self.escenarios = Escenarios(self.buffer, self.log, self, pausa=0.8)
 
         # FONDO
         self.bg_image = ctk.CTkImage(
@@ -265,3 +265,19 @@ class VentanaSimulador(ctk.CTkToplevel):
         self.running["state"] = False
         self.parent.deiconify()
         self.destroy()
+
+    def actualizar_buffer_ui(self):
+        """Actualiza colores y textos de las celdas del buffer según su contenido."""
+        estado = self.buffer.estado()
+        for idx, celda in enumerate(self.celdas):
+            dato = estado[idx]
+            if dato is None:
+                celda.configure(text="", fg_color="white")
+            else:
+                # Mostrar texto abreviado (ej: "D3")
+                celda.configure(text=str(dato), fg_color="green", text_color="black")
+        # También actualizar la información de conteo si se desea
+        self.info_labels["Registros"].configure(text=f"Registros: {self.buffer.count}")
+
+    def limpiar_consola(self):
+        self.textbox.delete("1.0", "end")
