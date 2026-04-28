@@ -38,7 +38,16 @@ class VentanaSimulador(ctk.CTkToplevel):
 
         self.running = {"state": False}
 
-        self.escenarios = Escenarios(self.buffer, self.log, self, pausa=0.8)
+        self.escenarios = Escenarios(self.buffer, self.log_estandarizado, self, pausa=0.8)
+
+        # NUEVO -> Contadores de estadísticas
+        self.stats = {
+            "producidos": 0,
+            "consumidos": 0,
+            "perdidos": 0,
+            "escenario": "Ninguno",
+            "estado_sistema": "Detenido"
+        }
 
         # FONDO
         self.bg_image = ctk.CTkImage(
@@ -232,6 +241,39 @@ class VentanaSimulador(ctk.CTkToplevel):
                       fg_color="#FFD900",
                       text_color="#138688").grid(row=3, column=0, columnspan=4)
 
+    #============ NUEVOS CAMBIOS =========================
+
+    # Método para actualizar el panel de info (ya existe self.info_labels)
+    def actualizar_panel_info(self):
+        self.info_labels["Registros"].configure(text=f"Registros buffer: {self.buffer.count}")
+        self.info_labels["Producidos"].configure(text=f"Producidos: {self.stats['producidos']}")
+        self.info_labels["Consumidos"].configure(text=f"Consumidos: {self.stats['consumidos']}")
+        self.info_labels["Perdidos"].configure(text=f"Perdidos: {self.stats['perdidos']}")
+        self.info_labels["Escenario"].configure(text=f"Escenario: {self.stats['escenario']}")
+        self.info_labels["Tiempo"].configure(text=f"Estado: {self.stats['estado_sistema']}")
+
+    # Método para resetear estadísticas (al cambiar de escenario)
+    def resetear_estadisticas(self, nuevo_escenario):
+        self.stats = {
+            "producidos": 0,
+            "consumidos": 0,
+            "perdidos": 0,
+            "escenario": nuevo_escenario,
+            "estado_sistema": "Ejecutando"
+        }
+        self.actualizar_panel_info()
+
+    # Método para actualizar estado de productor y consumidor en UI
+    def actualizar_estado_hilos(self, productor_texto=None, consumidor_texto=None, productor_desc=None, consumidor_desc=None):
+        if productor_texto is not None:
+            self.estado_prod.configure(text=productor_texto)
+        if consumidor_texto is not None:
+            self.estado_cons.configure(text=consumidor_texto)
+        if productor_desc is not None:
+            self.desc_prod.configure(text=productor_desc)
+        if consumidor_desc is not None:
+            self.desc_cons.configure(text=consumidor_desc)
+
     # LOG
 
 
@@ -242,20 +284,28 @@ class VentanaSimulador(ctk.CTkToplevel):
         self.textbox.insert("end", msg + "\n")
         self.textbox.see("end")
 
+    # Método para log estandarizado
+    def log_estandarizado(self, nivel, mensaje):
+        # nivel: INFO, WARN, ERROR
+        self.log(f"{nivel}: {mensaje}")
    
     # HILOS
   
 
     def iniciar_hilos(self):
+        self.resetear_estadisticas("Productor/Consumidor con semáforos")
+        self.stats["estado_sistema"] = "Ejecutando"
         self.running["state"] = True
 
-        productor = Productor(self.buffer, self.semaforos, self.log, self.running)
-        consumidor = Consumidor(self.buffer, self.semaforos, self.log, self.running)
+        # Pasar referencia a la ventana a productor y consumidor para que actualicen stats
+        self.productor = Productor(self.buffer, self.semaforos, self.log_estandarizado, self.running, self)
+        self.consumidor = Consumidor(self.buffer, self.semaforos, self.log_estandarizado, self.running, self)
 
-        threading.Thread(target=productor.run, daemon=True).start()
-        threading.Thread(target=consumidor.run, daemon=True).start()
+        threading.Thread(target=self.productor.run, daemon=True).start()
+        threading.Thread(target=self.consumidor.run, daemon=True).start()
 
-        self.log("Simulación iniciada")
+        self.log_estandarizado("INFO", "Simulación iniciada con semáforos")
+        self.actualizar_estado_hilos("Productor activo", "Consumidor activo", "Esperando vacíos...", "Esperando llenos...")
 
     def detener_hilos(self):
         self.running["state"] = False
