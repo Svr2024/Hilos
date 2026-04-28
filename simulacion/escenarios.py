@@ -4,7 +4,7 @@ class Escenarios:
 
     def __init__(self, buffer, log, ventana, pausa=0.8):
         self.buffer = buffer
-        self.log = log          # función que acepta (nivel, mensaje) o mensaje plano
+        self.log = log          
         self.ventana = ventana
         self.pausa = pausa
 
@@ -83,7 +83,7 @@ class Escenarios:
             self.ventana.update()
             time.sleep(self.pausa)
         
-        self.log("INFO", "FASE 2: La IA comienza a consumir (buffer -> AZUL -> BLANCO)...\n")
+        self.log("INFO", "FASE 2: La IA comienza a consumir ")
         
         # ----- FASE 2: Consumir hasta vaciar -----
         consumos_exitosos = 0

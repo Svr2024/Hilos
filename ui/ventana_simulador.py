@@ -1,6 +1,8 @@
 import customtkinter as ctk
 from PIL import Image
 import threading
+import psutil
+import time
 
 from simulacion.buffer import BufferCircular
 from simulacion.escenarios import Escenarios
@@ -25,9 +27,7 @@ class VentanaSimulador(ctk.CTkToplevel):
         for j in range(4):
             self.grid_columnconfigure(j, weight=1)
 
-       
         # LÓGICA
-     
         self.buffer = BufferCircular(10)
 
         self.semaforos = {
@@ -37,10 +37,9 @@ class VentanaSimulador(ctk.CTkToplevel):
         }
 
         self.running = {"state": False}
-
+        self.busy_running = False
         self.escenarios = Escenarios(self.buffer, self.log_estandarizado, self, pausa=0.8)
 
-        # NUEVO -> Contadores de estadísticas
         self.stats = {
             "producidos": 0,
             "consumidos": 0,
@@ -58,20 +57,16 @@ class VentanaSimulador(ctk.CTkToplevel):
         self.bg_label = ctk.CTkLabel(self, image=self.bg_image, text="")
         self.bg_label.place(relx=0, rely=0, relwidth=1, relheight=1)
 
-       
         # FILA 1
-        
 
-        # Col 1
         frame_titulo = ctk.CTkFrame(self, fg_color="transparent")
         frame_titulo.grid(row=0, column=0, sticky="nsew")
 
-        ctk.CTkLabel(frame_titulo, text="Simulación del radar inteligente",
+        ctk.CTkLabel(frame_titulo, text="Simulación del \n" "radar inteligente",
                      font=("Arial", 20, "bold"), text_color="#0F7172").pack()
         ctk.CTkLabel(frame_titulo, text="Caso productores y consumidores",
                      font=("Arial", 14), text_color="#0F7172").pack()
 
-        # Col 2
         frame_esc = ctk.CTkFrame(self, fg_color="transparent")
         frame_esc.grid(row=0, column=1, sticky="nsew")
 
@@ -101,7 +96,6 @@ class VentanaSimulador(ctk.CTkToplevel):
         ctk.CTkButton(frame_btns, text="Semáforos",
                       command=self.iniciar_hilos, **estilo_btn).grid(row=0, column=3, padx=5)
 
-        # Col 3
         frame_control = ctk.CTkFrame(self, fg_color="transparent")
         frame_control.grid(row=0, column=2, sticky="nsew")
 
@@ -119,20 +113,22 @@ class VentanaSimulador(ctk.CTkToplevel):
                                           command=self.iniciar_hilos)
         self.btn_reanudar.grid(row=0, column=1, padx=5)
 
-        # Col 4
         frame_modo = ctk.CTkFrame(self, fg_color="transparent")
         frame_modo.grid(row=0, column=3, sticky="nsew")
 
         ctk.CTkLabel(frame_modo, text="Modo espera activa",
                      font=("Arial", 14, "bold")).pack()
 
-        self.switch_busy = ctk.CTkSwitch(frame_modo, text="Activar while infinito")
+        
+        self.switch_busy = ctk.CTkSwitch(
+            frame_modo,
+            text="Activar while infinito",
+            command=self.toggle_busy_wait
+        )
         self.switch_busy.pack()
 
         # FILA 2
-       
 
-        # Productor
         frame_prod = ctk.CTkFrame(self,  fg_color="white")
         frame_prod.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
 
@@ -147,7 +143,6 @@ class VentanaSimulador(ctk.CTkToplevel):
         self.desc_prod = ctk.CTkLabel(frame_prod, text="Esperando inicio")
         self.desc_prod.pack()
 
-        # Buffer
         frame_buffer = ctk.CTkFrame(self,  fg_color="transparent")
         frame_buffer.grid(row=1, column=1, sticky="nsew", padx=5, pady=5)
 
@@ -163,7 +158,6 @@ class VentanaSimulador(ctk.CTkToplevel):
                 lbl.grid(row=i, column=j, padx=3, pady=3)
                 self.celdas.append(lbl)
 
-        # Leyenda colores buffer
         legend_frame = ctk.CTkFrame(frame_buffer, fg_color="transparent")
         legend_frame.pack(pady=5)
 
@@ -178,7 +172,6 @@ class VentanaSimulador(ctk.CTkToplevel):
         legend_item(legend_frame, "blue", "Leyendo")
         legend_item(legend_frame, "red", "Error")
 
-        # Consumidor
         frame_cons = ctk.CTkFrame(self, fg_color="white")
         frame_cons.grid(row=1, column=2, sticky="nsew", padx=5, pady=5)
 
@@ -193,7 +186,6 @@ class VentanaSimulador(ctk.CTkToplevel):
         self.desc_cons = ctk.CTkLabel(frame_cons, text="Esperando datos")
         self.desc_cons.pack()
 
-        # Semaforos
         frame_sem = ctk.CTkFrame(self, fg_color="white")
         frame_sem.grid(row=1, column=3, sticky="nsew", padx=5, pady=5)
 
@@ -208,11 +200,8 @@ class VentanaSimulador(ctk.CTkToplevel):
         self.lbl_mutex = ctk.CTkLabel(frame_sem, text="Mutex: 1")
         self.lbl_mutex.pack()
 
-        
         # FILA 3
-       
 
-        # Consola
         frame_console = ctk.CTkFrame(self, fg_color="transparent")
         frame_console.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=5, pady=5)
 
@@ -221,29 +210,87 @@ class VentanaSimulador(ctk.CTkToplevel):
         self.textbox = ctk.CTkTextbox(frame_console)
         self.textbox.pack(expand=True, fill="both")
 
-        # Info sistema
         frame_info = ctk.CTkFrame(self,fg_color="white")
         frame_info.grid(row=2, column=2, columnspan=2, sticky="nsew", padx=5, pady=5)
 
         self.info_labels = {}
-        campos = ["Registros", "Producidos", "Consumidos", "Perdidos", "Escenario", "Tiempo"]
+        campos = ["Registros", "Producidos", "Consumidos", "Perdidos", "Escenario", "Tiempo", "CPU Burst"]
 
         for c in campos:
             lbl = ctk.CTkLabel(frame_info, text=f"{c}: 0")
             lbl.pack(anchor="w")
             self.info_labels[c] = lbl
 
-        # FILA 4
-
-
         ctk.CTkButton(self, text="Volver",
                       command=self.volver_inicio,
                       fg_color="#FFD900",
                       text_color="#138688").grid(row=3, column=0, columnspan=4)
 
-    #============ NUEVOS CAMBIOS =========================
+    
 
-    # Método para actualizar el panel de info (ya existe self.info_labels)
+    def escenario_busy_wait(self):
+      self.limpiar_consola()
+      self.buffer.reset()
+
+      self.stats = {
+        "producidos": 0,
+        "consumidos": 0,
+        "perdidos": 0,
+        "escenario": "Busy Waiting (while infinito)",
+        "estado_sistema": "Ejecutando"
+      }
+
+      self.actualizar_panel_info()
+      self.actualizar_buffer_ui()
+
+      self.configure(fg_color="#FFF3A0")
+
+      self.busy_running = True  
+
+      self.log_estandarizado("WARN", "Modo BUSY WAIT activado")
+
+      def loop_busy():
+        while self.busy_running:
+            cpu = psutil.cpu_percent(interval=0.2)
+
+            if not self.busy_running:
+                break  
+
+            self.after(0, lambda c=cpu:
+                self.info_labels["CPU Burst"].configure(text=f"CPU Burst: {c}%"))
+
+            self.after(0, lambda:
+                self.log_estandarizado("WARN", "Sensor esperando espacio... CPU alta"))
+
+      threading.Thread(target=loop_busy, daemon=True).start()
+    def toggle_busy_wait(self):
+      if self.switch_busy.get():
+        self.running["state"] = False
+        self.escenario_busy_wait()
+      else:
+        
+        self.busy_running = False
+
+        time.sleep(0.25) 
+        self.limpiar_consola()
+        self.buffer.reset()
+        self.configure(fg_color="#C9EBED")
+
+        self.stats = {
+            "producidos": 0,
+            "consumidos": 0,
+            "perdidos": 0,
+            "escenario": "Ninguno",
+            "estado_sistema": "Detenido"
+        }
+
+        self.actualizar_panel_info()
+        self.actualizar_buffer_ui()
+
+        
+        self.info_labels["CPU Burst"].configure(text="CPU Burst: 0%")
+
+
     def actualizar_panel_info(self):
         self.info_labels["Registros"].configure(text=f"Registros buffer: {self.buffer.count}")
         self.info_labels["Producidos"].configure(text=f"Producidos: {self.stats['producidos']}")
@@ -252,7 +299,6 @@ class VentanaSimulador(ctk.CTkToplevel):
         self.info_labels["Escenario"].configure(text=f"Escenario: {self.stats['escenario']}")
         self.info_labels["Tiempo"].configure(text=f"Estado: {self.stats['estado_sistema']}")
 
-    # Método para resetear estadísticas (al cambiar de escenario)
     def resetear_estadisticas(self, nuevo_escenario):
         self.stats = {
             "producidos": 0,
@@ -263,7 +309,6 @@ class VentanaSimulador(ctk.CTkToplevel):
         }
         self.actualizar_panel_info()
 
-    # Método para actualizar estado de productor y consumidor en UI
     def actualizar_estado_hilos(self, productor_texto=None, consumidor_texto=None, productor_desc=None, consumidor_desc=None):
         if productor_texto is not None:
             self.estado_prod.configure(text=productor_texto)
@@ -274,9 +319,6 @@ class VentanaSimulador(ctk.CTkToplevel):
         if consumidor_desc is not None:
             self.desc_cons.configure(text=consumidor_desc)
 
-    # LOG
-
-
     def log(self, msg):
         self.after(0, lambda: self._log(msg))
 
@@ -284,20 +326,14 @@ class VentanaSimulador(ctk.CTkToplevel):
         self.textbox.insert("end", msg + "\n")
         self.textbox.see("end")
 
-    # Método para log estandarizado
     def log_estandarizado(self, nivel, mensaje):
-        # nivel: INFO, WARN, ERROR
         self.log(f"{nivel}: {mensaje}")
-   
-    # HILOS
-  
 
     def iniciar_hilos(self):
         self.resetear_estadisticas("Productor/Consumidor con semáforos")
         self.stats["estado_sistema"] = "Ejecutando"
         self.running["state"] = True
 
-        # Pasar referencia a la ventana a productor y consumidor para que actualicen stats
         self.productor = Productor(self.buffer, self.semaforos, self.log_estandarizado, self.running, self)
         self.consumidor = Consumidor(self.buffer, self.semaforos, self.log_estandarizado, self.running, self)
 
@@ -316,18 +352,24 @@ class VentanaSimulador(ctk.CTkToplevel):
         self.parent.deiconify()
         self.destroy()
 
+    def pintar_lectura(self, indice):
+      """Pinta una celda de azul cuando es leída."""
+      if 0 <= indice < len(self.celdas):
+        celda = self.celdas[indice]
+        celda.configure(fg_color="blue", text_color="black")
     def actualizar_buffer_ui(self):
-        """Actualiza colores y textos de las celdas del buffer según su contenido."""
-        estado = self.buffer.estado()
-        for idx, celda in enumerate(self.celdas):
-            dato = estado[idx]
-            if dato is None:
-                celda.configure(text="", fg_color="white")
-            else:
-                # Mostrar texto abreviado (ej: "D3")
-                celda.configure(text=str(dato), fg_color="green", text_color="black")
-        # También actualizar la información de conteo si se desea
-        self.info_labels["Registros"].configure(text=f"Registros: {self.buffer.count}")
+      """Actualiza colores y textos de las celdas del buffer según su contenido."""
+      estado = self.buffer.estado()
+
+      for idx, celda in enumerate(self.celdas):
+        dato = estado[idx]
+
+        if dato is None:
+            celda.configure(text="", fg_color="white")
+
+        else:
+          
+            celda.configure(text=str(dato), fg_color="green", text_color="black")
 
     def limpiar_consola(self):
         self.textbox.delete("1.0", "end")

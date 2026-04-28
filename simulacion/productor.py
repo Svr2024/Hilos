@@ -24,7 +24,7 @@ class Productor:
             self.buffer.producir(dato)
             self.ventana.stats["producidos"] += 1
             self.ventana.actualizar_panel_info()
-            self.log("INFO", f"Sensor depositó {dato} en posición {self.buffer.in_index-1 % self.buffer.tamaño}")
+            self.log("INFO", f"Sensor depositó {dato} en posición {(self.buffer.in_index-1) % self.buffer.tamaño}")
             self.ventana.actualizar_buffer_ui()
 
             self.mutex.release()

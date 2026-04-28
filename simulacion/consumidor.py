@@ -17,10 +17,13 @@ class Consumidor:
             self.llenos.acquire()
             self.mutex.acquire()
 
+            indice = (self.buffer.out_index) % self.buffer.tamaño
+            self.ventana.pintar_lectura(indice)
+
             dato = self.buffer.consumir()
             self.ventana.stats["consumidos"] += 1
             self.ventana.actualizar_panel_info()
-            self.log("INFO", f"IA consumió {dato} desde posición {self.buffer.out_index-1 % self.buffer.tamaño}")
+            self.log("INFO", f"IA consumió {dato} desde posición {(self.buffer.out_index-1) % self.buffer.tamaño}")
             self.ventana.actualizar_buffer_ui()
 
             self.mutex.release()

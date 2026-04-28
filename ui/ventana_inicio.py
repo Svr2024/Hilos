@@ -21,23 +21,25 @@ class VentanaInicio(ctk.CTk):
         # TÍTULO
         self.titulo = ctk.CTkLabel(
             self,
-            text="Hilos - Productor Consumidor",
-            font=("Arial", 32, "bold"),
+            text=" Caso de Productores y Consumidores ",
+            font=("Helvetica", 36, "bold"),
             text_color="#138688"
         )
         self.titulo.place(relx=0.5, rely=0.2, anchor="center")
 
         # DESCRIPCION
         texto = (
-            "Simulación del problema de sincronización Productor-Consumidor.\n"
-            "Se visualizarán escenarios de desbordamiento, vacío,\n"
-            "condiciones de carrera y la solución mediante semáforos y bla bla."
+            "Sistema de captura de un radar de tráfico inteligente en Barquisimeto.\n"
+            "Un sensor de alta velocidad captura metadatos de vehículos y los deposita \n"
+             "en un área de memoria compartida que tiene capacidad para exactamente 10 registros.\n"
+             "Por otro lado, un proceso de análisis de inteligencia artificial  extrae esos datos \n"
+             "para identificar infracciones. \n "
         )
 
         self.descripcion = ctk.CTkLabel(
             self,
             text=texto,
-            font=("Arial", 16),
+            font=("Segoe UI", 18),
             text_color="#138688",
             justify="center"
         )
