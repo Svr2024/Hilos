@@ -31,36 +31,73 @@ class Escenarios:
 
     def desbordamiento(self):
         self._limpiar_y_resetear("Desbordamiento")
-
+        self.log("INFO", "=== ESCENARIO: DESBORDAMIENTO (Productor más rápido que Consumidor) ===")
+        self.log("INFO", f"Buffer capacidad: {self.buffer.tamaño}. Productor intentará escribir 12 datos.\n")
+        
+        # Estado inicial del consumidor (más lento, procesa el primer dato)
+        self.ventana.actualizar_estado_hilos(
+            consumidor_texto="Consumidor ACTIVO (más lento)",
+            consumidor_desc="Procesando primer dato D0..."
+        )
+        
+        # Simular que el consumidor está procesando el primer dato lentamente
+        primer_dato = "D0"
+        self.ventana.stats["consumidos"] += 1
+        self.log("INFO", f"Consumidor IA: Comenzó a procesar '{primer_dato}'")
+        
         for i in range(12):
             dato = f"D{i}"
             self.log("INFO", f"Intento {i+1}: sensor intenta depositar {dato}")
             
             if self.buffer.esta_lleno():
-                self.ventana.stats["perdidos"] += 1
+                # En lugar de perderlo, SOBRESCRIBE el dato más antiguo (política circular)
+                # El dato sobrescrito está en la posición actual de escritura
+                pos_sobrescrita = self.buffer.in_index
+                dato_antiguo = self.buffer.buffer[pos_sobrescrita]
+                
+                # Sobrescribir el dato
+                self.buffer.producir(dato)
+                self.ventana.stats["producidos"] += 1
+                self.ventana.stats["perdidos"] += 1  # Se considera pérdida del dato antiguo
                 self.ventana.actualizar_panel_info()
-                self.log("ERROR", f"Registro perdido por desbordamiento: {dato} (buffer lleno)")
+                
+                self.log("ERROR", f" DESBORDAMIENTO: Buffer LLENO, sobrescribiendo posición {pos_sobrescrita}")
+                self.log("ERROR", f"   Dato sobrescrito: '{dato_antiguo}' → REEMPLAZADO por '{dato}'")
+                
+                # Pintar la celda sobrescrita de ROJO
+                self.ventana.celdas[pos_sobrescrita].configure(fg_color="red")
+                self.ventana.update()
+                time.sleep(self.pausa / 1)
+                
+                # Actualizar estado del productor
                 self.ventana.actualizar_estado_hilos(
-                    productor_texto="Productor Activo",
-                    productor_desc=f"Buffer lleno, perdió {dato}"
+                    productor_texto="Productor ACTIVO",
+                    productor_desc=f"¡Buffer lleno! Sobrescribió {dato_antiguo} con {dato} en pos {pos_sobrescrita}"
                 )
             else:
+                # Buffer con espacio libre: escritura normal
                 self.buffer.producir(dato)
                 self.ventana.stats["producidos"] += 1
                 self.ventana.actualizar_panel_info()
                 pos = (self.buffer.in_index - 1) % self.buffer.tamaño
-                self.log("INFO", f"Sensor depositó {dato} en posición {pos}")
+                self.log("INFO", f" Sensor depositó {dato} en posición {pos}")
                 self.ventana.actualizar_estado_hilos(
-                    productor_texto="Productor activo",
+                    productor_texto="Productor ACTIVO",
                     productor_desc=f"Depositó {dato} en pos {pos}"
                 )
             
+            # Actualizar UI y esperar
             self.ventana.actualizar_buffer_ui()
             self.ventana.update()
             time.sleep(self.pausa)
-
-        self.log("WARN", "Fin del escenario: se perdieron 2 datos por desbordamiento.")
-        self.ventana.stats["estado_sistema"] = "Completado"
+        
+        # Mostrar estado final del consumidor
+        '''self.ventana.actualizar_estado_hilos(
+            consumidor_texto="Consumidor ACTIVO (atrasado)",
+            consumidor_desc=f"Terminó de procesar D0, pero se perdieron {self.ventana.stats['perdidos']} datos"
+        )'''
+        
+        self.ventana.stats["estado_sistema"] = "Completado con SOBRESCRITURAS"
         self.ventana.actualizar_panel_info()
 
     def vacio(self):
