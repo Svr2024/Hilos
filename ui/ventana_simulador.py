@@ -233,35 +233,70 @@ class VentanaSimulador(ctk.CTkToplevel):
       self.buffer.reset()
 
       self.stats = {
-        "producidos": 0,
+        "producidos": 10,
         "consumidos": 0,
         "perdidos": 0,
         "escenario": "Busy Waiting (while infinito)",
-        "estado_sistema": "Ejecutando"
+        "estado_sistema": "Saturado"
       }
+
+    # ---- se llena el buffer ----
+      for i in range(self.buffer.tamaño):
+        self.buffer.buffer[i] = f"D{i+1}"
+      self.buffer.count = self.buffer.tamaño
+      self.buffer.in_index = 0
+      self.buffer.out_index = 0
 
       self.actualizar_panel_info()
       self.actualizar_buffer_ui()
 
+     
       self.configure(fg_color="#FFF3A0")
+
+    
+      self.actualizar_estado_hilos(
+        productor_texto="Productor ACTIVO",
+        productor_desc="Sensor esperando espacio...",
+        consumidor_texto="Consumidor inactivo",
+        consumidor_desc="No consume (sistema saturado)"
+       )
 
       self.busy_running = True  
 
-      self.log_estandarizado("WARN", "Modo BUSY WAIT activado")
+      self.log_estandarizado("WARN", "Modo BUSY WAIT activado: buffer lleno, CPU en espera activa")
 
+   
       def loop_busy():
-        while self.busy_running:
-            cpu = psutil.cpu_percent(interval=0.2)
+       while self.busy_running:
 
-            if not self.busy_running:
-                break  
+        # Carga CPU
+        start = time.time()
+        while time.time() - start < 0.2:
+            pass
 
-            self.after(0, lambda c=cpu:
-                self.info_labels["CPU Burst"].configure(text=f"CPU Burst: {c}%"))
+        if not self.busy_running:
+            break
 
-            self.after(0, lambda:
-                self.log_estandarizado("WARN", "Sensor esperando espacio... CPU alta"))
+        cpu = psutil.cpu_percent(interval=None)
 
+        if not self.busy_running:
+            break
+
+        # doble validación antes de tocar UI
+        self.after(0, lambda c=cpu:
+            self.info_labels["CPU Burst"].configure(text=f"CPU Burst: {c}%")
+            if self.busy_running else None
+         )
+
+        if not self.busy_running:
+            break
+
+        self.after(0, lambda:
+            self.log_estandarizado("WARN", "Sensor esperando espacio... (busy waiting)")
+             if self.busy_running else None
+         )
+
+    
       threading.Thread(target=loop_busy, daemon=True).start()
     def toggle_busy_wait(self):
       if self.switch_busy.get():
@@ -275,6 +310,15 @@ class VentanaSimulador(ctk.CTkToplevel):
         self.limpiar_consola()
         self.buffer.reset()
         self.configure(fg_color="#C9EBED")
+        self.actualizar_estado_hilos(
+        productor_texto="Estado: Inactivo",
+        consumidor_texto="Estado: Inactivo",
+        productor_desc="Esperando inicio",
+        consumidor_desc="Esperando datos"
+         )
+        
+        self.after(50, self.limpiar_consola)
+        self.after(50, lambda: self.info_labels["CPU Burst"].configure(text="CPU Burst: 0%"))
 
         self.stats = {
             "producidos": 0,
@@ -342,7 +386,8 @@ class VentanaSimulador(ctk.CTkToplevel):
 
         self.log_estandarizado("INFO", "Simulación iniciada con semáforos")
         self.actualizar_estado_hilos("Productor activo", "Consumidor activo", "Esperando vacíos...", "Esperando llenos...")
-
+        self.actualizar_semaforos_ui()
+        
     def detener_hilos(self):
         self.running["state"] = False
         self.log("Simulación detenida")
@@ -373,3 +418,8 @@ class VentanaSimulador(ctk.CTkToplevel):
 
     def limpiar_consola(self):
         self.textbox.delete("1.0", "end")
+        
+    def actualizar_semaforos_ui(self):
+     self.lbl_vacios.configure(text=f"Vacíos: {self.semaforos['vacios']._value}")
+     self.lbl_llenos.configure(text=f"Llenos: {self.semaforos['llenos']._value}")
+     self.lbl_mutex.configure(text=f"Mutex: {self.semaforos['mutex']._value}")
