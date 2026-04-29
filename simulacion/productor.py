@@ -15,9 +15,14 @@ class Productor:
     def run(self):
         while self.running["state"]:
             dato = f"D{random.randint(1, 99)}"
-            
-            # Espera activa? Se podría leer un switch de la UI. Por ahora normal.
-            self.vacios.acquire()   # Bloqueante normal
+
+ 
+            self.ventana.actualizar_estado_hilos(
+                productor_texto="Productor esperando",
+                productor_desc="Verificando espacio..."
+            )
+            self.ventana.update()
+            self.vacios.acquire()
             self.mutex.acquire()
 
             # Escribir en buffer
@@ -29,10 +34,13 @@ class Productor:
 
             self.mutex.release()
             self.llenos.release()
+            
+            self.ventana.actualizar_semaforos_ui()
 
-            # Actualizar descripción del productor
+            
             self.ventana.actualizar_estado_hilos(
-                productor_texto="Productor activo",
+                productor_texto="Estado: activo",
                 productor_desc=f"Último dato: {dato}"
             )
+
             time.sleep(random.uniform(0.3, 1.0))
